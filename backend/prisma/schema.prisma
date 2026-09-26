@@ -1,0 +1,111 @@
+generator client {
+	provider = "prisma-client-js"
+}
+
+datasource db {
+	provider = "postgresql"
+}
+
+enum Role {
+	ADMIN
+	RECEPTION
+	DENTIST
+}
+
+enum AppStatus {
+	PROGRAMADO
+	ATENDIDO
+	CANCELADO
+	AUSENTE
+}
+
+model User {
+	id                 String              @id @default(cuid())
+	email              String              @unique
+	firstName          String
+	lastName           String
+	passwordHash       String
+	role               Role                @default(RECEPTION)
+	createdAt          DateTime            @default(now())
+	updatedAt          DateTime            @updatedAt
+	appointments       Appointment[]       @relation("AppointmentProfessional")
+	clinicalAttentions ClinicalAttention[] @relation("AttentionProfessional")
+	odontogramAudits   OdontogramAudit[]   @relation("AuditActor")
+}
+
+model Patient {
+	id                 String              @id @default(cuid())
+	dni                String              @unique
+	firstName          String
+	lastName           String
+	phone              String
+	createdAt          DateTime            @default(now())
+	updatedAt          DateTime            @updatedAt
+	appointments       Appointment[]
+	clinicalAttentions ClinicalAttention[]
+}
+
+model Chair {
+	id           String        @id @default(cuid())
+	name         String        @unique
+	appointments Appointment[]
+}
+
+model Appointment {
+	id             String    @id @default(cuid())
+	patientId      String
+	professionalId String
+	chairId        String
+	date           DateTime  @db.Date
+	startTime      DateTime  @db.Time(0)
+	endTime        DateTime  @db.Time(0)
+	status         AppStatus @default(PROGRAMADO)
+	createdAt      DateTime  @default(now())
+	updatedAt      DateTime  @updatedAt
+	patient        Patient   @relation(fields: [patientId], references: [id])
+	professional   User      @relation("AppointmentProfessional", fields: [professionalId], references: [id])
+	chair          Chair     @relation(fields: [chairId], references: [id])
+
+	@@unique([professionalId, chairId, date, startTime, endTime])
+	@@index([patientId, date])
+}
+
+model ClinicalAttention {
+	id             String              @id @default(cuid())
+	patientId      String
+	professionalId String
+	attendedAt     DateTime            @default(now())
+	diagnosis      String?
+	treatment      String?
+	notes          String?
+	patient        Patient             @relation(fields: [patientId], references: [id])
+	professional   User                @relation("AttentionProfessional", fields: [professionalId], references: [id])
+	odontogram     OdontogramEntry[]
+}
+
+model OdontogramEntry {
+	id                  String            @id @default(cuid())
+	clinicalAttentionId String
+	tooth               Int
+	surface             String
+	state               String
+	recordedAt          DateTime          @default(now())
+	clinicalAttention   ClinicalAttention @relation(fields: [clinicalAttentionId], references: [id])
+	audits              OdontogramAudit[]
+
+	@@index([clinicalAttentionId, tooth])
+}
+
+model OdontogramAudit {
+	id                String          @id @default(cuid())
+	odontogramEntryId String
+	userId            String
+	previousState     String
+	newState          String
+	reason            String
+	createdAt         DateTime        @default(now())
+	odontogramEntry   OdontogramEntry @relation(fields: [odontogramEntryId], references: [id])
+	user              User            @relation("AuditActor", fields: [userId], references: [id])
+
+	@@index([odontogramEntryId, createdAt])
+}
