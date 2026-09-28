@@ -24,22 +24,45 @@ export const createAppointment = async (
       return;
     }
 
-    const overlapping = await prisma.appointment.findFirst({
-      where: {
-        date: appointmentDate,
-        status: { not: AppStatus.CANCELADO },
-        OR: [
-          { professionalId: data.professionalId },
-          { chairId: data.chairId },
-        ],
-        AND: [{ startTime: { lt: end } }, { endTime: { gt: start } }],
-      },
-    });
+    const [overlappingChair, overlappingProfessional] = await Promise.all([
+      prisma.appointment.findFirst({
+        where: {
+          date: appointmentDate,
+          chairId: data.chairId,
+          status: { not: AppStatus.CANCELADO },
+          AND: [{ startTime: { lt: end } }, { endTime: { gt: start } }],
+        },
+      }),
+      prisma.appointment.findFirst({
+        where: {
+          date: appointmentDate,
+          professionalId: data.professionalId,
+          status: { not: AppStatus.CANCELADO },
+          AND: [{ startTime: { lt: end } }, { endTime: { gt: start } }],
+        },
+      }),
+    ]);
 
-    if (overlapping) {
+    if (overlappingChair && overlappingProfessional) {
       res.status(409).json({
         message:
-          "Conflicto de agenda: el profesional o el sillón ya se encuentran ocupados en ese horario.",
+          "Conflicto de agenda: tanto el sillón como el profesional ya se encuentran ocupados en ese horario.",
+      });
+      return;
+    }
+
+    if (overlappingChair) {
+      res.status(409).json({
+        message:
+          "Conflicto de agenda: el sillón seleccionado ya se encuentra ocupado en ese horario.",
+      });
+      return;
+    }
+
+    if (overlappingProfessional) {
+      res.status(409).json({
+        message:
+          "Conflicto de agenda: el profesional ya tiene asignado otro turno en ese horario.",
       });
       return;
     }
